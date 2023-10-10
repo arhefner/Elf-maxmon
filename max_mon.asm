@@ -9,6 +9,14 @@
 #include sysconfig.inc
 #include bios.inc
 
+#ifndef ROMBASE
+#define ROMBASE   08000h
+#endif
+
+#ifndef MONSTART
+#define MONSTART  0f000h
+#endif
+
 #define INIT_CON
 
             ; Low Memory Usage
@@ -41,10 +49,7 @@ m_bpl:      equ   8
 o_wrmboot:  equ   0303h                 ; kernel warm-boot reinitialization
 k_clkfreq:  equ   0470h                 ; processor clock frequency in khz
 
-            extrn loadbin
-            extrn savebin
-
-            org   $8000
+            org   ROMBASE
 
 entry:      dis                         ; disable interrupts
             db    $00                   ; on reset
@@ -395,7 +400,7 @@ scnwait:    glo   re                    ; wait until value just written
 
             lbr   bootpg+0100h
 
-            org   $8100
+            .align page
 
 bootmsg:    ldi   devbits.1             ; pointer to memory variables
             phi   ra
@@ -568,9 +573,9 @@ devname:    db  'IDE',0                 ; bit 0
 
 endinit:    equ   $
 
-            org   $f000
+            org   MONSTART
 
-himem:      equ   $
+himem:      equ   $-1
 
             ; Whenever the monitor starts a program running, it will
             ; initialize R(1) with the address of the break routine.
@@ -818,7 +823,7 @@ l_cmd:      call  skipws
             lbr   prompt
 
 intro:      call  f_inmsg
-            db    13,"Max Monitor v4.0",13,10,0
+            db    13,"Max Monitor v4.1",13,10,0
 
 prompt:     b4    $
             call  f_inmsg
@@ -1027,25 +1032,14 @@ process:    call  f_inmsg
 
 s_cmd:      call  skipws
             call  f_hexin
-            ghi   rd
-            phi   ra
-            glo   rd
-            plo   ra
+            mov   ra,rd
             call  skipws
             call  f_hexin
             call  skipws
             ldn   rf
             lbnz  bad_parm
-            glo   rd
-            str   r2
-            glo   ra
-            sd
-            plo   rc
-            ghi   rd
-            str   r2
-            ghi   ra
-            sdb
-            phi   rc
+            mov   rc,rd
+            sub16 rc,ra
             bge   s_start
             call  f_inmsg
             db    "end < start",13,10,0
@@ -1057,8 +1051,7 @@ s_start:    inc   rc
             bnf   s_done
             call  f_inmsg
             db    "error",13,10,0
-s_done:     call  f_read
-            call  f_inmsg
+s_done:     call  f_inmsg
             db    "done",13,10,0
 s_ret:      lbr   prompt
 
@@ -1273,107 +1266,94 @@ readln:     push  rf                    ; save registers
             pop   rf
             rtn
 
-.link       .align  page
+            .align page
 
 ;------------------------------------------------------------------------
 ;routine to load a binary file from the serial port.
-            proc    loadbin
+loadbin:    ghi   r8
+            stxd
+            ghi   ra
+            stxd
+            glo   ra
+            stxd
+            ghi   rc
+            stxd
+            glo   rc
+            stxd
 
-state:      equ   rc
-dest:       equ   rd
-src:        equ   rd
+            ghi   re
+            phi   r8
+            ani   0feh
+            phi   re
 
-            ghi   state                 ; save registers used by
-            stxd                        ; binary loader
-            glo   state
-            stxd
-            ghi   dest
-            stxd
-            glo   dest
-            stxd
-            ldi   $0
-            phi   dest
-            plo   dest
-            plo   state
-ldnext:     call  f_read
-            phi   state                 ; save a copy
-            glo   state                 ; implement state machine
-            bz    state0
-            smi   $01
-            bz    state1
-            smi   $01
-            bz    state2
-            smi   $01
-            bz    state3
-            smi   $01
-            bz    state4
-            smi   $01
-            bz    state5
-            ldi   $00
-            plo   state
-            br    ldnext
-state0:     ghi   state                 ; state 0 - check if the byte is
-            ani   $fc                   ; a special character ($7c-$7f)
-            xri   $7c                   ; if it is, process it
-            bz    special
-            ghi   state                 ; if not, copy it to destination
-            str   dest                  ; memory address
-            inc   dest                  ; update destination address
-            br    ldnext
-state1:     ghi   state                 ; state 1 - load new high
-            phi   dest                  ; destination address
-            ldi   $02                   ; go to state 2
-            plo   state
-            br    ldnext
-state2:     ghi   state                 ; state 2 - load new low
-            plo   dest                  ; destination address
-            ldi   $00                   ; return to state 0
-            plo   state
-            br    ldnext
-state3:     ghi   state                 ; state 3 - process escape
-            xri   $20                   ; character by xoring next
-            str   dest                  ; byte with 0x20 before
-            inc   dest                  ; storing
-            ldi   $00                   ; return to state 0
-            plo   state
-            br    ldnext
-state4:     ghi   state                 ; state 4 - load high run
-            phi   r0                    ; address
-            ldi   $05                   ; go to state 5
-            plo   state
-            br    ldnext
-state5:     ghi   state                 ; state 5 - load low run
-            plo   r0                    ; address and start program
-            sep   r0                    ; with pc=r0
-special:    ghi   state                 ; process special character
-            ani   $03
-            bz    newaddr               ; $7c - new dest. address
-            smi   $01
-            bz    escape                ; $7d - escape next byte
-            smi   $01
-            bz    runaddr               ; $7e - run address
-            br    ldrtn                 ; $7f - end of file
-newaddr:    ldi   $01                   ; go to state 1
-            plo   state
-            br    ldnext
-escape:     ldi   $03                   ; go to state 3
-            plo   state
-            br    ldnext
-runaddr:    ldi   $04                   ; go to state 4
-            plo   state
-            br    ldnext
-ldrtn:      irx                         ; restore registers
+            call  f_read
+            xri   55h
+            bnz   lberror
+            ldi   0aah
+            call  f_type
+
+lbnext:     call  f_read
+            bz    lbover
+            call  f_type
+            
+            smi   1
+            bnz   lberror
+
+            call  f_read
+            phi   rc
+            call  f_type
+
+            call  f_read
+            plo   rc
+            dec   rc
+            call  f_type
+
+            call  f_read
+            phi   ra
+            call  f_type
+
+            call  f_read
+            plo   ra
+            call  f_type
+
+readlp:     call  f_read
+
+            str   ra
+            inc   ra
+
+            untl  rc,readlp
+
+ack:        ldi   0aah
+            call  f_type
+
+            br    lbnext
+
+lbover:     call  f_read
+            xri   'x'
+            bnz   lberror
+
+lbdone:     clc
+            lskp
+lberror:    stc
+
+            ghi   r8
+            phi   re
+
+            irx
             ldxa
-            plo   dest
+            plo   rc
             ldxa
-            phi   dest
+            phi   rc
             ldxa
-            plo   state
+            plo   ra
+            ldxa
+            phi   ra
             ldx
-            phi   state
+            phi   r8
+
             rtn
 
-            endp
+            .align page
 
 ;------------------------------------------------------------------------
 ;routine to save a binary file in max format.
@@ -1382,57 +1362,120 @@ ldrtn:      irx                         ; restore registers
 ;  ra = start address of saved data
 ;  rc = count of bytes to save
 ;
-            proc  savebin
-
+savebin:    ghi   r8
+            stxd
+            ghi   rb
+            stxd
             glo   rb
             stxd
-            call  f_read                ; wait for receiver
-            xri   $7c                   ; check start char
-            bnz   snderr
-            ldi   $7c                   ; send start address code
-            call  f_type
-            ghi   ra                    ; send start address
-            call  sendbyte
-            glo   ra
-            call  sendbyte
-sndnxt:     lda   ra                    ; get next byte to send
-            call  sendbyte              ; send it
-            dec   rc                    ; keep going until
-            ghi   rc                    ; we've sent the specified
-            bnz   sndnxt                ; number of bytes
-            glo   rc
-            bnz   sndnxt
-            ldi   $7f
-            call  f_type
-            adi   $00                   ; set df=0 for success
-            lskp
-snderr:     smi   $00                   ; set df=1 for error
-            irx
-            ldx
-            plo   rb
-            rtn
 
-;------------------------------------------------------------------------
-;routine to send a single byte in max format.
-;
-;on entry:
-;  data byte in d
-;
-sendbyte:   plo   rb
-            ani   $fc                   ; is it a special character ($7d-$7f)
-            xri   $7c                   ; if so, escape it
-            bz    sndspec
+            ghi   re
+            phi   r8
+            ani   0feh
+            phi   re
+
+            call  f_read
+            xri   0aah
+            bnz   sberror
+
+            ldi   55h
+            call  f_type
+
+sbnext:     mov   rb,rc
+            sub16 rb,512
+            bpz   send512
+
+            mov   rb,rc
+            br    sendblk
+
+send512:    mov   rb,512
+
+sendblk:    sub16 rc,rb
+
+            ldi   01h                   ; send 'receive block' command
+            call  f_type
+
+            call  f_read                ; check echo
+            xri   01h
+            bnz   sberror
+
+            ghi   rb                    ; send high byte of size
+            call  f_type
+
+            call  f_read                ; check echo
+            str   r2
+            ghi   rb
+            xor
+            bnz   sberror
+
+            glo   rb                    ; send low byte of size
+            call  f_type
+
+            call  f_read                ; check echo
+            str   r2
             glo   rb
-            call  f_type                ; if not, output raw byte
-            br    sndret
-sndspec:    ldi   $7d                   ; send escape code
+            xor
+            bnz   sberror
+
+            ghi   ra                    ; send high byte of address
             call  f_type
-            glo   rb                    ; xor next byte with $20
-            xri   $20
-            call  f_type                ; and send it
-sndret:
+
+            call  f_read                ; check echo
+            str   r2
+            ghi   ra
+            xor
+            bnz   sberror
+
+            glo   ra                    ; send low byte of address
+            call  f_type
+
+            call  f_read                ; check echo
+            str   r2
+            glo   ra
+            xor
+            bnz   sberror
+
+            dec   rb
+sendloop:   lda   ra                    ; send block
+            call  f_type
+            untl  rb,sendloop
+
+            call  f_read                ; check for ack
+            xri   0aah
+            bnz   sberror
+
+            brnz  rc,sbnext
+
+            ldi   00h                   ; send end command
+            call  f_type
+
+            call  f_read
+            xri   'x'
+            bnz   sberror
+
+sbdone:     clc
+            lskp
+sberror:    stc
+
+            ghi   r8
+            phi   re
+
+            irx
+            ldxa
+            plo   rb
+            ldxa
+            phi   rb
+            ldx
+            phi   r8
+
             rtn
 
-            endp
+            .align page
+
+            org   $-9
+
+m_break:    lbr   break
+m_loadbin:  lbr   loadbin
+m_savebin:  lbr   savebin
 
             end   entry
