@@ -333,7 +333,7 @@ scnwait:    glo   re                    ; wait until value just written
             bnf   scnloop
 
 #else
-            mov   rf,himem
+            mov   rf,HIMEM
 #endif
             ghi   rf
             smi   1

@@ -81,7 +81,7 @@ tknloop:    ldi   0c0h                  ; write lbr opcode and address
             glo   re
             bnz   tknloop
 
-            mov   rf,ROMBASE
+            mov   rf,HIMEM
 
             ghi   rf
             smi   1
@@ -90,10 +90,6 @@ tknloop:    ldi   0c0h                  ; write lbr opcode and address
             inc   ra
             ldi   0ffh
             str   ra
-
-            lbr   ROMBASE+0100h
-
-            .align page
 
 bootmsg:    ldi   devbits.1             ; pointer to memory variables
             phi   ra
