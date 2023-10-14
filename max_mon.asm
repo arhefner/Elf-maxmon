@@ -19,6 +19,14 @@
 
 #define INIT_CON
 
+#ifdef 1802MINI
+#define MINI_INIT
+#endif
+
+#ifdef 1802MAX
+#define MINI_INIT
+#endif
+
             ; Low Memory Usage
 
 findtkn:    equ   0030h                 ; jump vector for f_findtkn
@@ -81,11 +89,15 @@ chkdevs:    mov   ra,devbits            ; pointer to memory variables
             ldi   0                     ; device map msb for future use
             str   ra
 
+#ifdef MINI_INIT
             ldi   (1<<0)+(1<<2)         ; serial and disk always present
+#else
+            ldi   (1<<2)                ; serial always present
+#endif
             inc   ra
             str   ra
 
-
+#ifdef MINI_INIT
             ; Discovery of the devices is done by looking for some bits that
             ; should always have particular values. This doesn't guarantee
             ; that some other device isn't at the port, but it should be able
@@ -236,7 +248,7 @@ hzratio:    glo   rb                    ; multiply by 2 while moving to rf
             dec   rc                    ; loop the 4/5 multiply twice
             glo   rc
             bnz   hzratio
-
+#endif
 
             ; Store the processor clock frequency to it's memory variable.
 
@@ -265,10 +277,18 @@ savefrq:    inc   ra                    ; move on from device map
 tknloop:    ldi   0c0h                  ; write lbr opcode and address
             str   rf
             inc   rf
+#ifdef MINI_INIT
             ldi   o_wrmboot.1
+#else
+            ldi   break.1
+#endif
             str   rf
             inc   rf
+#ifdef MINI_INIT
             ldi   o_wrmboot.0
+#else
+            ldi   break.0
+#endif
             str   rf
             inc   rf
 
@@ -276,7 +296,7 @@ tknloop:    ldi   0c0h                  ; write lbr opcode and address
             glo   re
             bnz   tknloop
 
-
+#ifdef MINI_INIT
             ; It's not safe to run the expansion memory enable and memory
             ; scan code from ROM for two reasons: we are running from part
             ; of the ROM that will disappear once RAM is switched in, and
@@ -389,7 +409,6 @@ scnwait:    glo   re                    ; wait until value just written
 #else
             mov   rf,himem
 #endif
-
             ghi   rf
             smi   1
             str   ra
@@ -399,7 +418,19 @@ scnwait:    glo   re                    ; wait until value just written
             str   ra
 
             lbr   bootpg+0100h
+#else
+            mov   rf,ROMBASE
 
+            ghi   rf
+            smi   1
+            str   ra
+
+            inc   ra
+            ldi   0ffh
+            str   ra
+
+            lbr   ROMBASE+0100h
+#endif
             .align page
 
 bootmsg:    ldi   devbits.1             ; pointer to memory variables
@@ -490,12 +521,12 @@ skipdev:    lda   rd
             db    ' KB',13,10
             db    13,10,0
 
-
             ; Now that all initialization has been done, start the monitor by
             ; simply jumping to intro.
 
             lbr   intro
 
+#ifdef MINI_INIT
             ; Divide two 16-bit numbers to get a 16-bit result plus a 16-bit
             ; remainder. The input numbers are in RF and RD and the result
             ; RF/RD is returned in RB with the remainder in RF.
@@ -556,7 +587,7 @@ divskip:    glo   rb                    ; shift borrow bit into result and
             phi   re
 
             rtn                         ; return to caller
-
+#endif
             ;   0: IDE-like disk device
             ;   1: Floppy (no longer relevant)
             ;   2: Bit-banged serial
@@ -575,7 +606,7 @@ endinit:    equ   $
 
             org   MONSTART
 
-himem:      equ   $-1
+himem:      equ   $
 
             ; Whenever the monitor starts a program running, it will
             ; initialize R(1) with the address of the break routine.
@@ -814,8 +845,16 @@ restore:    ; restore registers R(2) thru R(F)
 
 l_cmd:      call  skipws
             ldn   rf
-            lbnz  bad_parm              ; there should be no parameters
-            call  f_inmsg
+            bnz   laddr
+            mov   ra,0
+            br    load
+laddr:      call  f_hexin
+            call  skipws
+            ldn   rf
+            lbnz  bad_parm
+            ; load run address into r0
+            mov   ra,rd
+load:       call  f_inmsg
             db    "Start send...",0
             call  loadbin
             call  f_inmsg
@@ -823,7 +862,7 @@ l_cmd:      call  skipws
             lbr   prompt
 
 intro:      call  f_inmsg
-            db    13,"Max Monitor v4.1",13,10,0
+            db    13,"Max Monitor v4.2",13,10,0
 
 prompt:     b4    $
             call  f_inmsg
@@ -1272,9 +1311,11 @@ readln:     push  rf                    ; save registers
 ;routine to load a binary file from the serial port.
 loadbin:    ghi   r8
             stxd
-            ghi   ra
+            glo   r8
             stxd
-            glo   ra
+            ghi   r9
+            stxd
+            glo   r9
             stxd
             ghi   rc
             stxd
@@ -1309,17 +1350,20 @@ lbnext:     call  f_read
             call  f_type
 
             call  f_read
-            phi   ra
+            phi   r9
             call  f_type
 
             call  f_read
-            plo   ra
+            plo   r9
+            plo   r8
+            add16 r9,ra
+            glo   r8
             call  f_type
 
 readlp:     call  f_read
 
-            str   ra
-            inc   ra
+            str   r9
+            inc   r9
 
             untl  rc,readlp
 
@@ -1345,9 +1389,11 @@ lberror:    stc
             ldxa
             phi   rc
             ldxa
-            plo   ra
+            plo   r9
             ldxa
-            phi   ra
+            phi   r9
+            ldxa
+            plo   r8
             ldx
             phi   r8
 
