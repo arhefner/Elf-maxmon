@@ -5,3 +5,5 @@
 *.hex
 *.bin
 
+build/
+build-test/

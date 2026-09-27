@@ -22,28 +22,29 @@
 
             ; Low Memory Usage
 
+            ; These must match the page zero layout used by the BIOS.
+
 findtkn:    equ   RAMBASE+0030h         ; jump vector for f_findtkn
 idnum:      equ   RAMBASE+0033h         ; jump vector for f_idnum
-devbits:    equ   RAMBASE+0036h         ; f_getdev device present result
-clkfreq:    equ   RAMBASE+0038h         ; processor clock frequency in khz
-lastram:    equ   RAMBASE+003ah         ; f_freemem last ram address result
-type:       equ   RAMBASE+003ch         ; RAM vector for console output
-read:       equ   RAMBASE+003fh         ; RAM vector for console input
+type:       equ   RAMBASE+0036h         ; RAM vector for console output
+read:       equ   RAMBASE+0039h         ; RAM vector for console input
+devbits:    equ   RAMBASE+003ch         ; f_getdev device present result
+clkfreq:    equ   RAMBASE+003eh         ; processor clock frequency in khz
+lastram:    equ   RAMBASE+0040h         ; f_freemem last ram address result
+romcurr:    equ   RAMBASE+0042h         ; rom disk current block
+diskmap:    equ   RAMBASE+0043h         ; disk map, 8 entries
+ocrreg:     equ   RAMBASE+004bh         ; sd card ocr register byte
 
-buffer:     equ   RAMBASE+0048h         ; buffer for I/O
-bufend:     equ   RAMBASE+007fh
+buffer:     equ   RAMBASE+0001h         ; buffer for I/O
+bufend:     equ   RAMBASE+002fh
 buflen:     equ   bufend-buffer+1
 
-savexp:     equ   RAMBASE+0080h
-saved:      equ   RAMBASE+0081h
-savedf:     equ   RAMBASE+0082h
-regs:       equ   RAMBASE+0083h         ; memory for register save
+savexp:     equ   RAMBASE+0060h
+saved:      equ   RAMBASE+0061h
+savedf:     equ   RAMBASE+0062h
+regs:       equ   RAMBASE+0063h         ; memory for register save
 
 stack:      equ   RAMBASE+00ffh         ; top of temporary booting stack
 
 bootpg:     equ   RAMBASE+0100h         ; address to load boot block to
 
-            ; Elf/OS Kernel Variables
-
-o_wrmboot:  equ   0303h                 ; kernel warm-boot reinitialization
-k_clkfreq:  equ   0470h                 ; processor clock frequency in khz

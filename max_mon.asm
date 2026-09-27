@@ -10,10 +10,8 @@ m_bpl:      equ   8
 
             org   MONSTART
 
-himem:      equ   $
-
 intro:      call  f_inmsg
-            db    13,"Max Monitor v4.2",13,10,0
+            db    13,"Max Monitor v4.3",13,10,0
 
 prompt:     b4    $
             call  f_inmsg
@@ -53,9 +51,9 @@ break:      sex   r2
             stxd                        ; save D to the stack
             shlc                        ; put DF in the lsb
             str   r2                    ; and save that too
-            
+
             ; save registers R(F) through R(2) in memory at regs
-            
+
             mov   r0,regs+32-1
             sex   r0
             push  rf
@@ -471,7 +469,7 @@ process:    call  f_inmsg
             db    "Bad command.",13,10,0
             lbr   prompt
 
-.align      page
+;.align      page
 
 s_cmd:      call  skipws
             call  f_hexin
@@ -486,7 +484,7 @@ s_cmd:      call  skipws
             bge   s_start
             call  f_inmsg
             db    "end < start",13,10,0
-            br    s_ret
+            lbr   s_ret
 s_start:    inc   rc
             call  f_inmsg
             db    "Start receive...",0
@@ -551,21 +549,41 @@ no_disp:    call  f_inmsg
             db    13,10,0
             lbr   prompt
 
-            ; this updates the kernel variable containing the processor clock
-            ; frequency since there is no other way for that to happen
+            ; Boot from a disk. The optional parameter is the disk number
+            ; (0-7, default 0), which is passed to the boot sector in R8.1
+            ; the same way the BIOS does when booting from a disk.
 
-b_cmd:      mov   rc,clkfreq            ; get address of bios variable
-            mov   rd,k_clkfreq          ; get address of kernel variable
+b_cmd:      call  skipws
+            call  f_hexin               ; get the disk number
+            call  skipws
+            ldn   rf                    ; check for extra
+            lbnz  bad_parm              ; parameters
+            ghi   rd                    ; disk number must be 0-7
+            lbnz  bad_parm
+            glo   rd
+            smi   8
+            lbdf  bad_parm
+            glo   rd                    ; set lba mode and disk number
+            ori   $e0
+            phi   r8
 
-            lda   rc                    ; update kernel with clock freq
-            str   rd
-            inc   rd
-            lda   rc
-            str   rd
+            ; reinitialize the stack and SCRT registers the same way the
+            ; BIOS does before booting
 
-            mov   r0,f_boot
-            sex   r0
-            sep   r0
+            mov   r2,stack
+            mov   r6,b_boot
+            lbr   f_initcall
+
+b_boot:     mov   rf,bootpg             ; load boot sector to bootpg
+            ldi   0                     ; from lba sector 0
+            plo   r7
+            phi   r7
+            plo   r8
+            call  f_ideread
+            lbnf  bootpg+6              ; jump to boot sector entry point
+            call  f_inmsg
+            db    "Boot failed.",13,10,0
+            lbr   prompt
 
 z_cmd:      call  skipws
             call  f_hexin               ; get the start address
@@ -740,7 +758,7 @@ loadbin:    ghi   r8
 lbnext:     call  f_read
             bz    lbover
             call  f_type
-            
+
             smi   1
             bnz   lberror
 
@@ -803,6 +821,10 @@ lberror:    stc
 
             rtn
 
+#if loadbin.1 != $.1
+#error loadbin crosses a page boundary
+#endif
+
             .align page
 
 ;------------------------------------------------------------------------
@@ -826,7 +848,7 @@ savebin:    ghi   r8
 
             call  f_read
             xri   0aah
-            bnz   sberror
+            lbnz  sberror
 
             ldi   55h
             call  f_type
@@ -894,7 +916,7 @@ sendloop:   lda   ra                    ; send block
             xri   0aah
             bnz   sberror
 
-            brnz  rc,sbnext
+            lbrnz rc,sbnext
 
             ldi   00h                   ; send end command
             call  f_type
@@ -920,12 +942,8 @@ sberror:    stc
 
             rtn
 
-            .align page
-
-            org   $-9
-
-m_break:    lbr   break
-m_loadbin:  lbr   loadbin
-m_savebin:  lbr   savebin
+#if $ > MONSTART+0800h
+#error Monitor overflows its 2K space
+#endif
 
             end   intro
