@@ -782,6 +782,42 @@ lbnext:     call  f_read
             glo   r8
             call  f_type
 
+            ; The data bytes are not echoed, so nothing paces the sender
+            ; but its own delay. Going through f_read costs more than a
+            ; byte time at 57600 baud, so when the console is the UART
+            ; (baud rate in RE.1 is zero) read it directly instead; this
+            ; loop keeps up with bytes sent back-to-back.
+
+            ghi   re
+            shr
+            bnz   readlp
+
+          #if UART_GROUP
+            sex   r3
+            out   EXP_PORT
+            db    UART_GROUP
+            sex   r2
+          #endif
+
+ureadlp:    inp   UART_STATUS           ; wait for data available
+            ani   1
+            bz    ureadlp
+
+            inp   UART_DATA
+            str   r9
+            inc   r9
+
+            untl  rc,ureadlp
+
+          #if UART_GROUP
+            sex   r3
+            out   EXP_PORT
+            db    NO_GROUP
+            sex   r2
+          #endif
+
+            br    ack
+
 readlp:     call  f_read
 
             str   r9
