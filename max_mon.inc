@@ -33,7 +33,8 @@ clkfreq:    equ   RAMBASE+003eh         ; processor clock frequency in khz
 lastram:    equ   RAMBASE+0040h         ; f_freemem last ram address result
 romcurr:    equ   RAMBASE+0042h         ; rom disk current block
 diskmap:    equ   RAMBASE+0043h         ; disk map, 8 entries
-ocrreg:     equ   RAMBASE+004bh         ; sd card ocr register byte
+ocrreg1:    equ   RAMBASE+004bh         ; sd card 1 ocr register byte
+ocrreg2:    equ   RAMBASE+004ch         ; sd card 2 ocr register byte
 
 buffer:     equ   RAMBASE+0001h         ; buffer for I/O
 bufend:     equ   RAMBASE+002fh
